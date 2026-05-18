@@ -36,7 +36,7 @@ const tools = [
 const modelWithTools = model.bindTools(tools);
 
 const messages = [
-new SystemMessage(`你是一个代码助手，可以使用工具读取文件并解释代码。
+new SystemMessage(`你是一个代码助手，可以使用工具读取文件并解释代码。
 
 工作流程：
 1. 用户要求读取文件时，立即调用 read_file 工具
@@ -96,7 +96,7 @@ const toolResults = await Promise.all(
 /*
 console.log('\n[最终请求内容]');
 console.log(messages);
-
 */
+
 console.log('\n[最终回复]');
 console.log(response.content);
