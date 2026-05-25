@@ -5,16 +5,22 @@ import { HumanMessage, SystemMessage, ToolMessage } from'@langchain/core/message
 import { executeCommandTool, listDirectoryTool, readFileTool, writeFileTool } from'./all-tools.mjs';
 
 const model = new ChatOpenAI({ 
-    modelName: "qwen3.6-plus",
-
+    modelName: "deepseek-v4-pro",
 
     apiKey: process.env.OPENAI_API_KEY,
+
     temperature: 0,
+
     configuration: {
         baseURL: process.env.OPENAI_BASE_URL,
     },
-});
 
+    modelKwargs: {
+        thinking: {
+            type: 'disabled',
+        },
+    },
+});
 
 const tools = [
     readFileTool,
@@ -30,6 +36,7 @@ const modelWithTools = model.bindTools(tools);
 async function runAgentWithTools(query, maxIterations = 30) {
     const messages = [
         new SystemMessage(`你是一个项目管理助手，使用工具完成任务。
+      
 
 当前工作目录: ${process.cwd()}
 
@@ -48,6 +55,7 @@ async function runAgentWithTools(query, maxIterations = 30) {
 这样就对了！workingDirectory 已经切换到 react-todo-app，直接执行命令即可
 
 回复要简洁，只说做了什么`),
+            
         new HumanMessage(query)
     ];
 
@@ -78,7 +86,7 @@ async function runAgentWithTools(query, maxIterations = 30) {
     return messages[messages.length - 1].content;
 }
 const case1 = `创建少女心手帐风React TodoList网页应用：
-1. 创建项目：npm create vite@latest react-handbook-todo -- --template react-ts
+1. 创建项目：pnpm create vite@latest react-todo-app --template react-ts --yes
 2. 修改src/App.tsx，实现完整手帐风格TodoList功能：
  - 添加、删除、编辑、勾选完成状态
  - 分类筛选（全部/未完成/已完成）

@@ -62,7 +62,7 @@ async ({ command, workingDirectory }) => {
       const child = spawn(cmd, args, {
         cwd,
         stdio: 'inherit', // 实时输出到控制台
-        shell: 'powershell.exe',
+        shell: true,
       });
 
       let errorMsg = '';
