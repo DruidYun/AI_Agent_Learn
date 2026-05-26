@@ -1,32 +1,20 @@
 import { useState, useEffect, useCallback } from 'react';
 import './App.css';
 
-/* ===== 类型定义 ===== */
-type TagType = 'guitar' | 'art' | 'default';
-type FilterType = 'all' | 'active' | 'completed';
-
+// ==================== 类型定义 ====================
 interface Todo {
   id: string;
   text: string;
   completed: boolean;
-  tag: TagType;
+  tag: '🎸弹吉他' | '🎨画画学PS' | '🎀设计' | null;
   createdAt: number;
 }
 
-const TAG_CONFIG: Record<TagType, { label: string; icon: string; emoji: string }> = {
-  guitar: { label: '🎸 弹吉他', icon: '🎸', emoji: '🎶' },
-  art: { label: '🎨 画画/设计', icon: '🎨', emoji: '✨' },
-  default: { label: '📝 普通', icon: '📝', emoji: '💖' },
-};
+type FilterType = 'all' | 'active' | 'completed';
 
-const FILTER_OPTIONS: { key: FilterType; label: string; icon: string }[] = [
-  { key: 'all', label: '全部', icon: '🌸' },
-  { key: 'active', label: '未完成', icon: '📋' },
-  { key: 'completed', label: '已完成', icon: '✅' },
-];
-
-/* ===== 工具函数 ===== */
-const generateId = (): string => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+// ==================== 工具函数 ====================
+const generateId = (): string =>
+  Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 
 const loadTodos = (): Todo[] => {
   try {
@@ -37,269 +25,309 @@ const loadTodos = (): Todo[] => {
   }
 };
 
-const saveTodos = (todos: Todo[]): void => {
+const saveTodos = (todos: Todo[]) => {
   localStorage.setItem('handbook-todos', JSON.stringify(todos));
 };
 
-/* ===== App 组件 ===== */
+// ==================== 组件 ====================
 function App() {
   const [todos, setTodos] = useState<Todo[]>(loadTodos);
   const [inputText, setInputText] = useState('');
-  const [selectedTag, setSelectedTag] = useState<TagType>('default');
   const [filter, setFilter] = useState<FilterType>('all');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
-  const [removingId, setRemovingId] = useState<string | null>(null);
+  const [selectedTag, setSelectedTag] = useState<Todo['tag']>(null);
+  const [animatingIds, setAnimatingIds] = useState<Set<string>>(new Set());
 
   // 持久化
   useEffect(() => {
     saveTodos(todos);
   }, [todos]);
 
-  // 筛选后的列表
-  const filteredTodos = todos.filter((todo) => {
-    if (filter === 'active') return !todo.completed;
-    if (filter === 'completed') return todo.completed;
+  // 筛选
+  const filteredTodos = todos.filter((t) => {
+    if (filter === 'active') return !t.completed;
+    if (filter === 'completed') return t.completed;
     return true;
   });
 
-  // 统计数据
-  const totalCount = todos.length;
-  const activeCount = todos.filter((t) => !t.completed).length;
-  const completedCount = todos.filter((t) => t.completed).length;
+  const stats = {
+    total: todos.length,
+    active: todos.filter((t) => !t.completed).length,
+    completed: todos.filter((t) => t.completed).length,
+  };
 
-  // 添加待办
-  const handleAdd = useCallback(() => {
-    const trimmed = inputText.trim();
-    if (!trimmed) return;
+  // 添加
+  const addTodo = useCallback(() => {
+    const text = inputText.trim();
+    if (!text) return;
     const newTodo: Todo = {
       id: generateId(),
-      text: trimmed,
+      text,
       completed: false,
       tag: selectedTag,
       createdAt: Date.now(),
     };
     setTodos((prev) => [newTodo, ...prev]);
     setInputText('');
-    setSelectedTag('default');
+    setSelectedTag(null);
   }, [inputText, selectedTag]);
 
-  // 切换完成状态
-  const handleToggle = useCallback((id: string) => {
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') addTodo();
+  };
+
+  // 删除（带离场动画）
+  const deleteTodo = useCallback((id: string) => {
+    setAnimatingIds((prev) => new Set(prev).add(id));
+    setTimeout(() => {
+      setTodos((prev) => prev.filter((t) => t.id !== id));
+      setAnimatingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }, 350);
+  }, []);
+
+  // 切换完成
+  const toggleTodo = useCallback((id: string) => {
     setTodos((prev) =>
       prev.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t))
     );
   }, []);
 
-  // 删除（带动画）
-  const handleDelete = useCallback((id: string) => {
-    setRemovingId(id);
-    setTimeout(() => {
-      setTodos((prev) => prev.filter((t) => t.id !== id));
-      setRemovingId(null);
-    }, 320);
-  }, []);
-
-  // 开始编辑
-  const handleStartEdit = useCallback((todo: Todo) => {
+  // 编辑
+  const startEdit = (todo: Todo) => {
     setEditingId(todo.id);
     setEditText(todo.text);
-  }, []);
+  };
 
-  // 保存编辑
-  const handleSaveEdit = useCallback(() => {
-    const trimmed = editText.trim();
-    if (trimmed && editingId) {
+  const saveEdit = () => {
+    if (!editingId) return;
+    const text = editText.trim();
+    if (text) {
       setTodos((prev) =>
-        prev.map((t) => (t.id === editingId ? { ...t, text: trimmed } : t))
+        prev.map((t) => (t.id === editingId ? { ...t, text } : t))
       );
     }
     setEditingId(null);
     setEditText('');
-  }, [editText, editingId]);
+  };
 
-  // 取消编辑
-  const handleCancelEdit = useCallback(() => {
+  const cancelEdit = () => {
     setEditingId(null);
     setEditText('');
-  }, []);
+  };
 
-  // 键盘事件
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter') {
-        if (editingId) {
-          handleSaveEdit();
-        } else {
-          handleAdd();
-        }
-      }
-      if (e.key === 'Escape' && editingId) {
-        handleCancelEdit();
-      }
-    },
-    [handleAdd, handleSaveEdit, handleCancelEdit, editingId]
-  );
+  const handleEditKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') saveEdit();
+    if (e.key === 'Escape') cancelEdit();
+  };
+
+  // 清空已完成
+  const clearCompleted = () => {
+    setTodos((prev) => prev.filter((t) => !t.completed));
+  };
 
   return (
-    <div className="app-container">
-      {/* ===== 头部卡片 ===== */}
-      <header className="header-card">
-        <div className="header-decorations">
-          <span>🌸</span>
-          <span>🎀</span>
-          <span>💗</span>
-          <span>🎀</span>
-          <span>🌸</span>
-        </div>
-        <h1 className="header-title">✨ 少女心手帐 ✨</h1>
-        <p className="header-subtitle">记录每一天的小确幸 💕</p>
+    <div className="app-wrapper">
+      {/* 装饰浮动元素 */}
+      <div className="floating-decor">
+        <span className="decor deco-guitar">🎸</span>
+        <span className="decor deco-palette">🎨</span>
+        <span className="decor deco-heart">💖</span>
+        <span className="decor deco-star">✨</span>
+        <span className="decor deco-pencil">✏️</span>
+        <span className="decor deco-sparkle">🌟</span>
+      </div>
 
+      <div className="handbook-card">
+        {/* 头部 */}
+        <header className="card-header">
+          <div className="header-icon-row">
+            <span>🎀</span>
+            <span>📒</span>
+            <span>🌸</span>
+          </div>
+          <h1 className="title">
+            <span className="title-icon">💗</span>
+            我的可爱手帐
+            <span className="title-icon">💗</span>
+          </h1>
+          <p className="subtitle">✿ 把每一天的小确幸都记下来吧 ✿</p>
+        </header>
+
+        {/* 统计栏 */}
         <div className="stats-bar">
           <div className="stat-item">
-            <span className="stat-icon">📝</span>
-            <span>全部</span>
-            <span className="stat-count">{totalCount}</span>
+            <span className="stat-icon">📋</span>
+            <span className="stat-num">{stats.total}</span>
+            <span className="stat-label">全部</span>
           </div>
+          <div className="stat-divider" />
           <div className="stat-item">
-            <span className="stat-icon">🌸</span>
-            <span>待办</span>
-            <span className="stat-count">{activeCount}</span>
+            <span className="stat-icon">✍️</span>
+            <span className="stat-num">{stats.active}</span>
+            <span className="stat-label">待完成</span>
           </div>
+          <div className="stat-divider" />
           <div className="stat-item">
             <span className="stat-icon">✅</span>
-            <span>完成</span>
-            <span className="stat-count">{completedCount}</span>
+            <span className="stat-num">{stats.completed}</span>
+            <span className="stat-label">已完成</span>
           </div>
         </div>
-      </header>
 
-      {/* ===== 输入卡片 ===== */}
-      <div className="input-card">
-        <div className="todo-form">
-          <input
-            type="text"
-            className="todo-input"
-            placeholder="💭 今天想做什么呢？写下来吧..."
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            onKeyDown={handleKeyDown}
-            maxLength={100}
-          />
-          <button className="add-btn" onClick={handleAdd}>
-            ✨ 添加
-          </button>
-        </div>
-        <div className="tag-selector">
-          {(Object.entries(TAG_CONFIG) as [TagType, typeof TAG_CONFIG['default']][]).map(
-            ([key, config]) => (
+        {/* 输入区 */}
+        <div className="input-area">
+          <div className="input-row">
+            <input
+              type="text"
+              className="todo-input"
+              placeholder="今天想做什么呢？写下来吧～ ✨"
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              onKeyDown={handleKeyDown}
+            />
+            <button className="btn-add" onClick={addTodo}>
+              <span className="btn-add-icon">➕</span>
+              <span>添加</span>
+            </button>
+          </div>
+          {/* 标签选择 */}
+          <div className="tag-selector">
+            <span className="tag-label">🏷️ 标记：</span>
+            {([
+              { value: null, label: '📝 无标签' },
+              { value: '🎸弹吉他' as const, label: '🎸 弹吉他' },
+              { value: '🎨画画学PS' as const, label: '🎨 画画学PS' },
+              { value: '🎀设计' as const, label: '🎀 设计' },
+            ]).map((opt) => (
               <button
-                key={key}
-                className={`tag-btn ${selectedTag === key ? 'active' : ''}`}
-                onClick={() => setSelectedTag(key)}
+                key={String(opt.value)}
+                className={`tag-chip ${selectedTag === opt.value ? 'active' : ''}`}
+                onClick={() =>
+                  setSelectedTag(selectedTag === opt.value ? null : opt.value)
+                }
               >
-                {config.label}
+                {opt.label}
               </button>
-            )
+            ))}
+          </div>
+        </div>
+
+        {/* 筛选栏 */}
+        <div className="filter-bar">
+          {([
+            { key: 'all', label: '🌸 全部' },
+            { key: 'active', label: '🎀 未完成' },
+            { key: 'completed', label: '✨ 已完成' },
+          ] as const).map((f) => (
+            <button
+              key={f.key}
+              className={`filter-btn ${filter === f.key ? 'active' : ''}`}
+              onClick={() => setFilter(f.key)}
+            >
+              {f.label}
+            </button>
+          ))}
+          {stats.completed > 0 && (
+            <button className="btn-clear" onClick={clearCompleted}>
+              🧹 清空已完成
+            </button>
           )}
         </div>
-      </div>
 
-      {/* ===== 筛选栏 ===== */}
-      <div className="filter-bar">
-        {FILTER_OPTIONS.map((opt) => (
-          <button
-            key={opt.key}
-            className={`filter-btn ${filter === opt.key ? 'active' : ''}`}
-            onClick={() => setFilter(opt.key)}
-          >
-            {opt.icon} {opt.label}
-          </button>
-        ))}
-      </div>
-
-      {/* ===== 待办列表 ===== */}
-      <div className="todo-list">
-        {filteredTodos.length === 0 ? (
-          <div className="empty-state">
-            <div className="empty-icon">
-              {filter === 'completed' ? '🎉' : filter === 'active' ? '🌸' : '📒'}
-            </div>
-            <p className="empty-text">
-              {filter === 'completed'
-                ? '还没有完成的事项，加油哦～'
-                : filter === 'active'
-                  ? '太棒了！所有事项都完成啦 🎀'
-                  : '手帐空空如也，快来写下第一个小心愿吧 💖'}
-            </p>
-          </div>
-        ) : (
-          filteredTodos.map((todo) => {
-            const tagConfig = TAG_CONFIG[todo.tag];
-            const isEditing = editingId === todo.id;
-            const isRemoving = removingId === todo.id;
-
-            return (
-              <div
+        {/* 列表 */}
+        <ul className="todo-list">
+          {filteredTodos.length === 0 ? (
+            <li className="empty-state">
+              <span className="empty-icon">📭</span>
+              <p>
+                {filter === 'all'
+                  ? '还没有待办事项哦～快来写第一条吧！💕'
+                  : filter === 'active'
+                    ? '太棒了！所有事项都完成啦～🎉'
+                    : '还没有完成的事项呢，加油哦～💪'}
+              </p>
+            </li>
+          ) : (
+            filteredTodos.map((todo) => (
+              <li
                 key={todo.id}
-                className={`todo-item tag-${todo.tag} ${todo.completed ? 'completed' : ''} ${isRemoving ? 'removing' : ''}`}
+                className={`todo-item ${todo.completed ? 'completed' : ''} ${animatingIds.has(todo.id) ? 'removing' : ''}`}
               >
                 {/* 复选框 */}
-                <div className="checkbox-wrapper">
-                  <div
-                    className={`checkbox-custom ${todo.completed ? 'checked' : ''}`}
-                    onClick={() => handleToggle(todo.id)}
-                  >
-                    {todo.completed ? '✓' : ''}
-                  </div>
-                </div>
+                <button
+                  className={`check-circle ${todo.completed ? 'checked' : ''}`}
+                  onClick={() => toggleTodo(todo.id)}
+                  aria-label={todo.completed ? '取消完成' : '标记完成'}
+                >
+                  {todo.completed ? '✅' : '○'}
+                </button>
 
-                {/* 内容区 */}
-                <div className="todo-content">
-                  {isEditing ? (
+                {/* 内容 */}
+                {editingId === todo.id ? (
+                  <div className="edit-inline">
                     <input
-                      type="text"
                       className="edit-input"
                       value={editText}
                       onChange={(e) => setEditText(e.target.value)}
-                      onKeyDown={handleKeyDown}
-                      onBlur={handleSaveEdit}
+                      onKeyDown={handleEditKeyDown}
                       autoFocus
-                      maxLength={100}
                     />
-                  ) : (
-                    <>
-                      <div className="todo-text">{todo.text}</div>
-                      <span className={`todo-tag ${todo.tag}`}>
-                        {tagConfig.icon} {tagConfig.label}
+                    <button className="btn-save-edit" onClick={saveEdit}>
+                      💾
+                    </button>
+                    <button className="btn-cancel-edit" onClick={cancelEdit}>
+                      ❌
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <span className="todo-text" onDoubleClick={() => startEdit(todo)}>
+                      {todo.text}
+                    </span>
+                    {todo.tag && (
+                      <span className={`todo-tag tag-${todo.tag.includes('吉他') ? 'guitar' : todo.tag.includes('画画') ? 'art' : 'design'}`}>
+                        {todo.tag}
                       </span>
-                    </>
-                  )}
-                </div>
+                    )}
+                  </>
+                )}
 
                 {/* 操作按钮 */}
-                {!isEditing && (
+                {editingId !== todo.id && (
                   <div className="todo-actions">
                     <button
-                      className="action-btn edit-btn"
-                      onClick={() => handleStartEdit(todo)}
+                      className="btn-action btn-edit"
+                      onClick={() => startEdit(todo)}
                       title="编辑"
                     >
                       ✏️
                     </button>
                     <button
-                      className="action-btn delete-btn"
-                      onClick={() => handleDelete(todo.id)}
+                      className="btn-action btn-delete"
+                      onClick={() => deleteTodo(todo.id)}
                       title="删除"
                     >
                       🗑️
                     </button>
                   </div>
                 )}
-              </div>
-            );
-          })
-        )}
+              </li>
+            ))
+          )}
+        </ul>
+
+        {/* 底部 */}
+        <footer className="card-footer">
+          <p>
+            💖 每一天都值得被温柔记录 💖
+            <span className="footer-decor">🎸 🎨 ✨</span>
+          </p>
+        </footer>
       </div>
     </div>
   );
